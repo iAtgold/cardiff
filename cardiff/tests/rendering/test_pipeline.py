@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from cardiff.contract import load_and_validate_request
@@ -60,3 +61,24 @@ def test_missing_asset_is_classified_before_pdf_generation():
 
     assert result.status == RenderStatus.FAILED
     assert result.failure_class == RenderFailureClass.TEMPLATE_ASSET_MISSING
+
+
+def test_deterministic_adapter_fails_clearly_on_non_ascii_identity_text():
+    request = _load_request()
+    unicode_request = replace(
+        request,
+        identity=replace(request.identity, full_name="José Álvarez"),
+    )
+    output_path = APPROVED_SAMPLES / "unicode-name.pdf"
+
+    result = render_request_to_pdf(
+        unicode_request,
+        output_path,
+        approved_asset_roots=(APPROVED_ASSETS,),
+        tex_adapter=DeterministicTeXAdapter(),
+    )
+
+    assert result.status == RenderStatus.FAILED
+    assert result.failure_class == RenderFailureClass.TEX_COMPILE_FAILED
+    assert result.output_path is None
+    assert any("non-ASCII" in message for message in result.diagnostics)
